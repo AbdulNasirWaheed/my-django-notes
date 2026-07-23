@@ -1,3 +1,15 @@
+# ---------- Build stage ----------
+# Installs Python dependencies into an isolated prefix so the final image
+# doesn't carry pip's cache, wheel build artifacts, or any build-only tools.
+FROM python:3.10-slim AS builder
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+
+# ---------- Final stage ----------
 FROM python:3.10-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -6,14 +18,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# No system packages needed here unless requirements.txt pulls in something
-# that requires compiling (e.g. mysqlclient or psycopg2 without the -binary
-# variant). This project's requirements.txt (Django, DRF, gunicorn, whitenoise,
-# etc.) has no such dependency, so we skip apt-get entirely to keep the image
-# small and the build fast.
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Bring in only the installed packages from the builder stage — no pip cache,
+# no leftover build tooling, keeping the final image lean.
+COPY --from=builder /install /usr/local
 
 COPY . .
 
@@ -26,6 +33,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()" || exit 1
 
-# Single worker, small thread pool — tuned for a small (1GB RAM) instance.
+# Single worker, small thread pool — tuned for a small (1GB RAM) instance,
+# and avoids SQLite "database is locked" issues from concurrent writers.
 # Bump --workers once you move to a bigger instance.
 CMD ["gunicorn", "notesapp.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "2", "--timeout", "60"]
