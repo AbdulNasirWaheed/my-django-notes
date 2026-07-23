@@ -1,4 +1,4 @@
-# ---------- Build stage ----------
+# ---------- Build stage 1 ----------
 # Installs Python dependencies into an isolated prefix so the final image
 # doesn't carry pip's cache, wheel build artifacts, or any build-only tools.
 FROM python:3.10-slim AS builder
