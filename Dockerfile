@@ -6,14 +6,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# libpq5 is the runtime client lib needed by psycopg2-binary (which ships its
-# own compiled C extension, so no gcc/libpq-dev/compiling is needed at all).
+# libpq5 only (runtime client lib). No gcc/libpq-dev needed since we use
+# psycopg2-binary below, which ships a precompiled C extension — this keeps
+# the build fast and avoids compiling on a small/low-CPU instance.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
@@ -27,4 +27,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()" || exit 1
 
-CMD ["gunicorn", "notesapp.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+# Single worker, small thread pool — tuned for a small (1GB RAM) instance.
+# Bump --workers once you move to a bigger instance.
+CMD ["gunicorn", "notesapp.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "2", "--timeout", "60"]
