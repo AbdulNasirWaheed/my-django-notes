@@ -6,12 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# libpq5 only (runtime client lib). No gcc/libpq-dev needed since we use
-# psycopg2-binary below, which ships a precompiled C extension — this keeps
-# the build fast and avoids compiling on a small/low-CPU instance.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    && rm -rf /var/lib/apt/lists/*
+# No system packages needed here unless requirements.txt pulls in something
+# that requires compiling (e.g. mysqlclient or psycopg2 without the -binary
+# variant). This project's requirements.txt (Django, DRF, gunicorn, whitenoise,
+# etc.) has no such dependency, so we skip apt-get entirely to keep the image
+# small and the build fast.
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
